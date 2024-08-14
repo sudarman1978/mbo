@@ -1,0 +1,139 @@
+<?php
+class Payroll_model extends CI_Model {
+  function __construct() {
+    parent::__construct();
+  }
+
+  function salaryPosting($fld_btid,$fld_baido,$fld_btdt,$fld_btdtsap,$fld_btdtsop) {
+    $gholiday = $this->db->query("select fld_holidaydt from tbl_holiday where fld_holidaydt >= '$fld_btdtsap' and fld_holidaydt <=  '$fld_btdtsop' ");
+    $gholiday = $gholiday->result();
+    $holidayList = array();
+    foreach ($gholiday as $rholiday) {
+      $holidayList [] = $rholiday->fld_holidaydt;
+    }
+    $fld_btdtsa = strtotime($fld_btdtsap);
+    $fld_btdtso = strtotime($fld_btdtsop);
+    $days = abs(($fld_btdtso - $fld_btdtsa) / 86400) + 1;
+
+  echo "Start to counting .....  <br>";
+  echo "Work Days = $work_days <br>";
+    $gemp = $this->db->query("select fld_empid,fld_empfpid,fld_empnm,fld_empbasepay,fld_empmealpay,fld_emptranspay,fld_empfuncpay,fld_emplevel from tbl_emp where fld_emporg=$fld_baido");
+    $gallowance = $this->db->query("select fld_btiid, fld_btinm, fld_btival  from tbl_bti where fld_bticid=1");
+    foreach ($gallowance->result() as $rowallowance) {
+      if ($rowallowance->fld_btiid == 1) {
+        $meal_allowance = $rowallowance->fld_btival;
+      }
+       if ($rowallowance->fld_btiid == 2) {
+        $trans_allowance_staff = $rowallowance->fld_btival;
+      }
+        if ($rowallowance->fld_btiid == 3) {
+        $trans_allowance_manager = $rowallowance->fld_btival;
+      }
+    }
+    foreach ($gemp->result() as $row) {
+      echo "Employee Name : " . $row->fld_empnm . "<br>";
+      ### Cek Employee Sayurday Off Scheduled
+      $gsaturday = $this->db->query("select fld_saturdayoffdt from tbl_saturdayoff where fld_empid = $row->fld_empid and fld_saturdayoffdt >= '$fld_btdtsap' and fld_saturdayoffdt <=  '$fld_btdtsop' ");
+      $gsaturday = $gsaturday->result();
+      $saturdayList = array();
+      foreach ($gsaturday as $rsaturday) {
+        $saturdayList [] = $rsaturday->fld_saturdayoffdt;
+      }
+      ###
+
+      ### Cek Employee Leave Wage Payed
+      $gleave1 = $this->db->query("select sum(t0.fld_btqty) 'leave' from tbl_bth  t0 left join tbl_tyval t1 on t1.fld_tyvalcd=t0.fld_btp03 and t1.fld_tyid=22 where t0.fld_btiid = $row->fld_empid and t0.fld_bttyid = 23 and t1.fld_tyvalcfg=1 and date_format(t0.fld_btdtsa,'%Y-%m-%d')  >= '$fld_btdtsap' and date_format(t0.fld_btdtso,'%Y-%m-%d')  <=  '$fld_btdtsop' ");
+      $gleave1 = $gleave1->row();
+      $leave1 = $gleave1->leave;
+      ###
+
+      ### Cek Employee Leave Wage Not Payed
+      $gleave2 = $this->db->query("select sum(t0.fld_btqty) 'leave' from tbl_bth  t0 left join tbl_tyval t1 on t1.fld_tyvalcd=t0.fld_btp03 and t1.fld_tyid=22 where t0.fld_btiid = $row->fld_empid and t0.fld_bttyid = 23 and t1.fld_tyvalcfg=2  and date_format(t0.fld_btdtsa,'%Y-%m-%d')  >= '$fld_btdtsap' and date_format(t0.fld_btdtso,'%Y-%m-%d')  <=  '$fld_btdtsop' ");
+      $gleave2 = $gleave2->row();
+      $leave2 = $gleave2->leave;
+      ###
+
+      ### Cek Employee Late
+      $glate_charge = $this->db->query("select sum(round(time_to_sec(timediff(fld_empattdin,'09:00') )/60  )) 'late_time'  from tbl_empattd t0 where t0.fld_empfpid = $row->fld_empfpid and date_format(t0.fld_empattddt,'%Y-%m-%d') >= date_format('$fld_btdtsap','%Y-%m-%d')  and date_format(t0.fld_empattddt,'%Y-%m-%d') <= date_format('$fld_btdtsop','%Y-%m-%d') and fld_empattdin >'09:00:00'");
+      $glate_charge = $glate_charge->row();
+      $late_charge = $glate_charge->late_time;
+      ###
+
+
+      $empwork_days = 0;
+      for ($i=0; $i<$days; ++$i) {
+        $tmp_day = strtotime("+$i day", $fld_btdtsa);
+        $day = strftime("%A",$tmp_day);
+        $tmp = strftime("%Y-%m-%d",$tmp_day);
+        if(($day != "Sunday") && (!in_array($tmp, $holidayList)) && (!in_array($tmp, $saturdayList))) {
+          $empwork_days = $empwork_days + 1;
+        }
+      }
+      echo "Employee Work Days : " . $empwork_days . "<br>"; 
+      $total_salary = 0;
+      $base_pay = 0
+      $meal_pay = 0;
+      $transport_pay = 0;
+      $base_pay = $row->fld_empbasepay;
+      $functional_pay = 0;
+      echo "Base Pay : " . $row->fld_empbasepay . "<br>";
+      $gsalcomp = $this->db->query("select t1.fld_btiid,t1.fld_btival from tbl_empsalcomp t0 left join tbl_bti t1 on t1.fld_btiid=t0.fld_btiid where t0.fld_empid = $row->fld_empid");
+      foreach ($gsalcomp->result() as $rowgs) {
+      }
+      if ($row->fld_emptranspay == 1) {
+        if ($row->fld_emplevel <= 4 && $row->fld_emplevel >= 1) {
+          $transport_pay = $trans_allowance_staff * $empwork_days;
+        }
+        if ($row->fld_emplevel > 4 ) {
+          $transport_pay = $trans_allowance_manager * $empwork_days;
+        }
+      }
+      else {
+        $transport_pay = 0;
+      }
+
+      if ($row->fld_empmealpay == 1) { 
+        $meal_pay = $meal_allowance * $empwork_days;
+      }
+      else {
+        $meal_pay = 0;
+      }
+      $total_pay = $base_pay + $meal_pay + $transport_pay + $functional_pay;
+      echo "Meal Pay : " . $meal_pay . "<br>";
+      echo "Transport Pay : " . $transport_pay . "<br>";
+      echo " Take Home Pay : " . $base_pay + $meal_pay + $transport_pay . "<br>";
+     
+      ### Potongan Absen
+      if ($leave1 + $leave2 > 0) {
+        $transport_deduction = ($leave1 + $leave2) *  $transport_pay;
+        $wage_deduction = $leave2 * $wage_per_day;
+        if ($row->fld_emplevel < 4) {
+          $absence_deduction = $transport_deduction + $absence_deduction;
+        }
+        else {
+          $absence_deduction = 0;
+        }
+      }
+      ###
+
+      ### Potongan Telat 
+      $wage_per_day = ($base_pay / 30 ) + $meal_pay;
+      $wage_per_menit = $wage_per_day / 420;
+      if ($late_charge > 0) {
+        if ($row->fld_emplevel < 4) {
+          $late_deduction = $late_charge * $wage_per_menit;
+        }
+        else {
+          $late_deduction = 0;
+        }
+      }
+      ###
+      echo " Absence Deduction =  : " . $absence_deduction . "<br>";
+      echo " Late Deduction =  : " . $late_deduction . "<br>";
+      echo "----------------------------------------------------<br>";
+
+      $this->db->query("insert into tbl_salary (fld_btid,fld_company,fld_periode,fld_empid,fld_basepay,fld_mealpay,fld_transpay,fld_funcpay,fld_totalpay) values ($fld_btid,$fld_baido,date_format('$fld_btdt','%Y-%m'),$row->fld_empid,$base_pay,$meal_pay,$transport_pay,$functional_pay,$total_pay)");
+    }
+                
+  }
+}
